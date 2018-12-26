@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Points Viewer</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body {
+				background-color: #000000;
+				margin: 0px;
+				overflow: hidden;
+				font-family:Monospace;
+				font-size:13px;
+				text-align:center;
+				font-weight: bold;
+				text-align:center;
+			}
+
+			a {
+				color:#0078ff;
+			}
+
+			#info {
+				color:#fff;
+				position: absolute;
+				top: 0px;
+				width: 100%;
+				padding: 5px;
+			}
+
+		</style>
+	</head>
+	<body>
+
+		<!-- <div id="info">
+			<a href="http://threejs.org" target="_blank" rel="noopener">three.js</a> - webgl particle billboards example
+		</div> -->
+
+		<script src="js/three.js"></script>
+
+		<script src="js/WebGL.js"></script>
+		<script src="js/TrackballControls.js"></script>
+		<script src="js/OrbitControls.js"></script>
+
+		<script src="js/libs/stats.min.js"></script>
+		<script src="js/libs/dat.gui.min.js"></script>
+
+		<script>
+
+			if ( WEBGL.isWebGLAvailable() === false ) {
+
+				document.body.appendChild( WEBGL.getWebGLErrorMessage() );
+
+			}
+
+			var camera, scene, renderer, stats, material, controls;
+			var mouseX = 0, mouseY = 0;
+
+			var windowHalfX = window.innerWidth / 2;
+			var windowHalfY = window.innerHeight / 2;
+
+			init();
+			animate();
+
+
+			function load_step(step_data, scene) {
+				var sprite = new THREE.TextureLoader().load( 'textures/sprites/disc.png' );
+
+				// var particles = 500;
+				var geometry = new THREE.BufferGeometry();
+
+				var positions = [];
+				var colors = [];
+				var color = new THREE.Color();
+
+				var n = 1.0, n2 = n / 2; // particles spread in the cube
+
+				var num_pts = step_data['embeddings_norm'].length
+
+				for ( var i = 0; i < num_pts; i ++ ) {
+					p = step_data['embeddings_norm'][i];
+					c = step_data['colors'][i];
+
+					var x = p[0];//Math.random() * n - n2;
+					var y = p[1];//Math.random() * n - n2;
+					var z = p[2];//Math.random() * n - n2;
+					positions.push( x, y, z );
+					// colors
+					var vx = c[0];
+					var vy = c[1];
+					var vz = c[2];
+
+					color.setRGB( vx, vy, vz );
+					colors.push( color.r, color.g, color.b );
+				}
+				geometry.addAttribute( 'position', new THREE.Float32BufferAttribute( positions, 3 ) );
+				geometry.addAttribute( 'color', new THREE.Float32BufferAttribute( colors, 3 ) );
+				geometry.computeBoundingSphere();
+
+				var material = new THREE.PointsMaterial( { size: 0.1, vertexColors: THREE.VertexColors, map: sprite, alphaTest: 0.5 } );
+				points = new THREE.Points( geometry, material );
+				scene.add( points );
+
+				var axesHelper = new THREE.AxesHelper( 5 );
+				scene.add( axesHelper );
+			}
+
+			function init() {
+
+				camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 0.001, 100);
+				camera.position.z = 1;
+
+				scene = new THREE.Scene();
+				scene.fog = new THREE.FogExp2( 0x000000, 0.0001);
+
+
+				var size = 1;
+				var divisions = 10;
+
+				// var gridHelper = new THREE.GridHelper( size, divisions );
+				// scene.add( gridHelper );
+
+				
+				//
+
+				renderer = new THREE.WebGLRenderer({ antialias: false });
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				document.body.appendChild( renderer.domElement );
+
+
+				controls = new THREE.OrbitControls( camera, renderer.domElement );
+				//controls.addEventListener( 'change', render ); // call this only in static scenes (i.e., if there is no animation loop)
+				controls.enableDamping = true; // an animation loop is required when either damping or auto-rotation are enabled
+				controls.dampingFactor = 0.25;
+				controls.screenSpacePanning = false;
+				controls.minDistance = 0.001;
+				controls.maxDistance = 500;
+				controls.rotateSpeed = 0.4;
+				controls.enablePan = false;
+				controls.maxPolarAngle = Math.PI;
+				// controls.addEventListener( 'change', render );
+
+				//
+
+				stats = new Stats();
+				document.body.appendChild( stats.dom );
+
+				//
+
+				var gui = new dat.GUI();
+
+				var Params = function() {
+					this.step = 0;
+				};
+
+				var params = new Params();
+
+				gui.open();
+
+
+				var xhr = new XMLHttpRequest();
+
+				xhr.onload = function (e) {
+
+					data = JSON.parse(xhr.responseText)['data'];
+
+					var steps = data.length - 1;
+
+					gui.add( params, 'step' , 0, steps).onFinishChange( function () {
+						// console.log(params.step);
+						while(scene.children.length > 0){ 
+							scene.remove(scene.children[0]); 
+						}
+
+						load_step(data[Math.floor(params.step)], scene);
+					} );
+
+
+					load_step(data[params.step], scene);
+				};
+				
+				xhr.open("GET", "/data/data.json", true);
+				xhr.send(null);
+
+				//
+
+				// document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+				// document.addEventListener( 'touchstart', onDocumentTouchStart, false );
+				// document.addEventListener( 'touchmove', onDocumentTouchMove, false );
+
+				//
+
+				window.addEventListener( 'resize', onWindowResize, false );
+
+				render();
+
+			}
+
+			function onWindowResize() {
+
+				windowHalfX = window.innerWidth / 2;
+				windowHalfY = window.innerHeight / 2;
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+				render();
+
+			}
+
+			function animate() {
+				requestAnimationFrame( animate );
+				
+				controls.update();
+				
+				stats.update();
+
+				render();
+			}
+
+			function render() {
+				renderer.render( scene, camera );
+			}
+
+
+			// function onDocumentMouseMove( event ) {
+
+			// 	mouseX = event.clientX - windowHalfX;
+			// 	mouseY = event.clientY - windowHalfY;
+
+			// }
+
+			// function onDocumentTouchStart( event ) {
+
+			// 	if ( event.touches.length == 1 ) {
+
+			// 		event.preventDefault();
+
+			// 		mouseX = event.touches[ 0 ].pageX - windowHalfX;
+			// 		mouseY = event.touches[ 0 ].pageY - windowHalfY;
+
+			// 	}
+
+			// }
+
+			// function onDocumentTouchMove( event ) {
+
+			// 	if ( event.touches.length == 1 ) {
+
+			// 		event.preventDefault();
+
+			// 		mouseX = event.touches[ 0 ].pageX - windowHalfX;
+			// 		mouseY = event.touches[ 0 ].pageY - windowHalfY;
+
+			// 	}
+
+			// }
+
+			//
+
+			// function animate() {
+
+			// 	requestAnimationFrame( animate );
+
+			// 	render();
+			// 	stats.update();
+
+			// }
+
+			// function render() {
+
+			// 	var time = Date.now() * 0.00005;
+
+			// 	// camera.position.x += ( mouseX - camera.position.x ) * 0.05;
+			// 	// camera.position.y += ( - mouseY - camera.position.y ) * 0.05;
+
+			// 	camera.lookAt( scene.position );
+
+			// 	var h = ( 360 * ( 1.0 + time ) % 360 ) / 360;
+			// 	material.color.setHSL( h, 0.5, 0.5 );
+
+			// 	renderer.render( scene, camera );
+
+			// }
+
+		</script>
+	</body>
+</html>
