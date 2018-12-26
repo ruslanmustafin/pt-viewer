@@ -37,6 +37,7 @@
 		</div> -->
 
 		<script src="js/three.js"></script>
+		<script src="js/palette.js"></script>
 
 		<script src="js/WebGL.js"></script>
 		<script src="js/TrackballControls.js"></script>
@@ -62,8 +63,46 @@
 			init();
 			animate();
 
+			// function 
+			function clear_scene(scene) {
+				while(scene.children.length > 0){ 
+					scene.remove(scene.children[0]); 
+				}
+			}
 
-			function load_step(step_data, scene) {
+			function to_rgb(hex, color){
+				r = parseInt(hex.substring(0,2), 16)/255;
+				g = parseInt(hex.substring(2,4), 16)/255;
+				b = parseInt(hex.substring(4,6), 16)/255;
+
+				// result = 'rgba('+r+','+g+','+b+','+opacity/100+')';
+				color.setRGB( r, g, b );
+			}
+
+			function norm(p) {
+				return Math.sqrt(p[0]*p[0] + p[1]*p[1] + p[2]*p[2]);
+			}
+
+			function normalize_matrix(data) {
+				num_pts = data.length;
+				data_norm = [];
+
+				for ( var i = 0; i < num_pts; i++ ) {
+					p = data[i];
+					n = norm(p);
+
+					data_norm.push([p[0]/n, p[1]/n, p[2]/n]);
+
+				} 
+
+				return data_norm;
+			}
+
+			// function color_for_class(class, num_classes) {
+				
+			// }
+
+			function load_step(step_data, scene, params, scheme) {
 				var sprite = new THREE.TextureLoader().load( 'textures/sprites/disc.png' );
 
 				// var particles = 500;
@@ -77,21 +116,47 @@
 
 				var num_pts = step_data['embeddings_norm'].length
 
+				// console.log(scheme[0]);
+
 				for ( var i = 0; i < num_pts; i ++ ) {
-					p = step_data['embeddings_norm'][i];
-					c = step_data['colors'][i];
+					
+					// c = step_data['colors'][i];
 
-					var x = p[0];//Math.random() * n - n2;
-					var y = p[1];//Math.random() * n - n2;
-					var z = p[2];//Math.random() * n - n2;
-					positions.push( x, y, z );
-					// colors
-					var vx = c[0];
-					var vy = c[1];
-					var vz = c[2];
+					// // colors
+					// var vx = c[0];
+					// var vy = c[1];
+					// var vz = c[2];
 
-					color.setRGB( vx, vy, vz );
-					colors.push( color.r, color.g, color.b );
+					// color.setRGB( vx, vy, vz );
+					to_rgb(scheme[step_data['classes'][i]], color);
+
+					if (params.embeddingsNorm) {
+						p = step_data['embeddings_norm'][i];
+
+						var x = p[0];//Math.random() * n - n2;
+						var y = p[1];//Math.random() * n - n2;
+						var z = p[2];//Math.random() * n - n2;
+						positions.push( x, y, z );
+						
+						colors.push( color.r, color.g, color.b );
+					}
+
+					if (params.embeddings) {
+						p = step_data['embeddings'][i];
+
+						var x = p[0];//Math.random() * n - n2;
+						var y = p[1];//Math.random() * n - n2;
+						var z = p[2];//Math.random() * n - n2;
+						positions.push( x, y, z );
+						
+						colors.push( color.r, color.g, color.b );
+					}
+					
+					
+
+					
+
+					
 				}
 				geometry.addAttribute( 'position', new THREE.Float32BufferAttribute( positions, 3 ) );
 				geometry.addAttribute( 'color', new THREE.Float32BufferAttribute( colors, 3 ) );
@@ -123,6 +188,8 @@
 				
 				//
 
+				scheme = palette('tol', 10);
+
 				renderer = new THREE.WebGLRenderer({ antialias: false });
 				renderer.setPixelRatio( window.devicePixelRatio );
 				renderer.setSize( window.innerWidth, window.innerHeight );
@@ -152,6 +219,10 @@
 
 				var Params = function() {
 					this.step = 0;
+					this.embeddings = false;
+					this.embeddingsNorm = true;
+					this.kernel = false;
+					this.kernelNorm= false;
 				};
 
 				var params = new Params();
@@ -165,19 +236,45 @@
 
 					data = JSON.parse(xhr.responseText)['data'];
 
-					var steps = data.length - 1;
+					for ( var i = 0; i < data.length; i++ ) {
+						item = data[i];
 
-					gui.add( params, 'step' , 0, steps).onFinishChange( function () {
-						// console.log(params.step);
-						while(scene.children.length > 0){ 
-							scene.remove(scene.children[0]); 
+						item['embeddings_norm'] = normalize_matrix(item['embeddings']);
+						item['kernel_norm'] = normalize_matrix(item['kernel']);
+					}
+
+					
+
+					var steps = data.length - 1;
+					var current_step = params.step;
+
+					gui.add( params, 'step' , 0, steps).onChange( function () {
+						
+						var new_step = Math.floor(params.step);
+
+						if (new_step != current_step) {
+							current_step = new_step;
+
+							// console.log(current_step);
+
+							clear_scene(scene);
+							load_step(data[current_step], scene, params, scheme);
 						}
 
-						load_step(data[Math.floor(params.step)], scene);
+						
 					} );
 
+					gui.add( params, 'embeddingsNorm').name("emb norm").onFinishChange(function() {
+						clear_scene(scene);
+						load_step(data[Math.floor(params.step)], scene, params, scheme);
+        			});
 
-					load_step(data[params.step], scene);
+					gui.add( params, 'embeddings').name("emb").onFinishChange(function() {
+						clear_scene(scene);
+						load_step(data[Math.floor(params.step)], scene, params, scheme);
+        			});
+
+					load_step(data[params.step], scene, params, scheme);
 				};
 				
 				xhr.open("GET", "/data/data.json", true);
