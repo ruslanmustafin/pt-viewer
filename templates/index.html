@@ -83,11 +83,12 @@
 			var params = new Params();
 			params.datasets_names = {};
 
-			for (var i = 0; i < params.datasets.length; i++) {
-				item = params.datasets[i].split('/');
-				item = item[item.length - 1];
-				params.datasets_names[item] = i; 
-			}
+			
+			
+			
+			
+
+			
 
 
 			var gui = new dat.GUI();
@@ -117,6 +118,16 @@
 				load_step(data[Math.floor(params.step)], scene, params);
 			});
 
+			if (params.datasets.length == 0) {
+				gui.add( params, 'dataset_index', {'no data found':0})
+			} else {
+				for (var i = 0; i < params.datasets.length; i++) {
+					item = params.datasets[i].split('/');
+					item = item[item.length - 1];
+					params.datasets_names[item] = i; 
+				}
+			}
+
 			gui.open();
 
 			init(params);
@@ -125,7 +136,14 @@
 			load(params);
 
 			function load(params) {
+
+				if (params.datasets.length == 0) {
+					return;
+				}
+
 				var xhr = new XMLHttpRequest();
+
+
 
 				xhr.onload = function (e) {
 
