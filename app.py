@@ -21,7 +21,7 @@ def send_data(path):
 
 @app.route("/")
 def main():
-    runs = glob.glob('data/*.json')
+    runs = sorted(glob.glob('data/*.json'))
     print(runs)
     # datasets = ["/data/data.json", "/data/data_2.json"]
     return render_template('index.html', datasets=json.dumps(runs))
